@@ -1,4 +1,39 @@
-# ... (imports and init_model remain the same) ...
+import runpod
+import torch
+from TTS.api import TTS
+import base64
+import os
+import re
+import numpy as np
+import soundfile as sf
+from pydub import AudioSegment, effects
+from pydub.silence import split_on_silence
+
+# --- GLOBAL MODEL LOADING ---
+tts = None
+
+def init_model():
+    global tts
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Loading XTTS v2 on {device}...")
+    tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+    print("✅ Model Loaded Successfully!")
+
+def extreme_audio_prep(input_path, output_path):
+    try:
+        audio = AudioSegment.from_file(input_path)
+        audio = effects.normalize(audio)
+        nonsilent_chunks = split_on_silence(audio, min_silence_len=500, silence_thresh=-40)
+        if nonsilent_chunks:
+            audio = sum(nonsilent_chunks)
+        if len(audio) > 12000:
+            audio = audio[:12000]
+        audio = audio.set_channels(1).set_frame_rate(22050).set_sample_width(2)
+        audio.export(output_path, format="wav")
+        return True
+    except Exception as e:
+        print(f"Audio Prep Error: {e}")
+        return False
 
 def handler(job):
     global tts
@@ -7,43 +42,67 @@ def handler(job):
 
     try:
         job_input = job["input"]
-        
-        # --- INPUTS ---
         text = job_input.get("text", "").strip()
         language = job_input.get("language", "en")
         speaker_wav_b64 = job_input.get("speaker_wav", "")
         
-        # --- OPTIMIZED CLONING SETTINGS ---
-        # 1. Temperature: Lowered to 0.65.
-        # Too high (0.8+) causes voice drift; too low (0.5-) sounds robotic.
-        # 0.65 is the "Sweet Spot" for accent retention.
+        # --- OPTIMIZED SETTINGS ---
         temperature = float(job_input.get("temperature", 0.65)) 
-
-        # 2. Repetition Penalty: Lowered to 1.8.
-        # Your previous 4.0 was stripping the life and accent out of the voice.
-        # 1.8 prevents loops but allows natural phonetic patterns.
         repetition_penalty = float(job_input.get("repetition_penalty", 1.8)) 
-
-        # 3. Top P: Set to 0.8.
-        # This forces the model to choose the most likely "accented" phonemes.
         top_p = float(job_input.get("top_p", 0.80))
-        
         speed = float(job_input.get("speed", 1.0))
-        top_k = int(job_input.get("top_k", 50))
 
-        # ... (rest of paths and audio prep logic remains the same) ...
+        raw_path = "/tmp/raw_ref.wav"
+        clean_path = "/tmp/clean_ref.wav"
+        output_path = "/tmp/final_output.wav"
 
-        # --- CORE TTS GENERATION ---
-        wav = tts.tts(
-            text=sentence,
-            speaker_wav=clean_path,
-            language=language,
-            temperature=temperature,        # Using new 0.65
-            top_p=top_p,                    # Using new 0.80
-            top_k=top_k,
-            repetition_penalty=repetition_penalty, # Using new 1.8
-            speed=speed,
-            split_sentences=False 
-        )
+        if "," in speaker_wav_b64:
+            speaker_wav_b64 = speaker_wav_b64.split(",")[1]
         
-# ... (rest of audio export remains the same) ...
+        with open(raw_path, "wb") as f:
+            f.write(base64.b64decode(speaker_wav_b64))
+        
+        if not extreme_audio_prep(raw_path, clean_path):
+            return {"status": "error", "message": "Audio preprocessing failed"}
+
+        # --- TEXT SPLITTING LOGIC ---
+        # Fixed: Splitting the 'text' variable into 'sentences'
+        sentences = re.split(r'([.?!:;\n]+)', text)
+        processed_sentences = []
+        current = ""
+        for s in sentences:
+            current += s
+            if len(current) > 80 or any(p in s for p in ".?!:;\n"):
+                if current.strip():
+                    processed_sentences.append(current.strip())
+                current = ""
+        if current.strip():
+            processed_sentences.append(current.strip())
+
+        combined_wav = []
+        sample_rate = 24000 
+
+        for sentence in processed_sentences:
+            # Fixed: Now passing the correct loop variable 'sentence'
+            wav_chunk = tts.tts(
+                text=sentence,
+                speaker_wav=clean_path,
+                language=language,
+                temperature=temperature,
+                top_p=top_p,
+                repetition_penalty=repetition_penalty,
+                speed=speed,
+                split_sentences=False 
+            )
+            combined_wav.extend(wav_chunk)
+
+        sf.write(output_path, np.array(combined_wav), sample_rate)
+        with open(output_path, "rb") as f:
+            audio_base64 = base64.b64encode(f.read()).decode('utf-8')
+
+        return {"status": "success", "audio_base64": audio_base64}
+
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+runpod.serverless.start({"handler": handler})
