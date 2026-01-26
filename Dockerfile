@@ -14,13 +14,12 @@ WORKDIR /app
 # Upgrade pip
 RUN pip3 install --no-cache-dir --upgrade pip
 
-# Install Torch (Large layer)
-RUN pip3 install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cu118
+# --- FIX: Pin Torch Version to 2.1.1 (Stable for XTTS) ---
+# Hum nay yahan version fix kar diya hay taake naya PyTorch 2.6 install na ho
+RUN pip3 install --no-cache-dir torch==2.1.1+cu118 torchaudio==2.1.1+cu118 --index-url https://download.pytorch.org/whl/cu118
 
-# --- CRITICAL FIX START ---
-# Downgrade transformers to fix the 'BeamSearchScorer' ImportError
+# --- CRITICAL FIX: Downgrade transformers ---
 RUN pip3 install --no-cache-dir transformers==4.33.0
-# --- CRITICAL FIX END ---
 
 # Install TTS
 RUN pip3 install --no-cache-dir TTS
@@ -30,7 +29,7 @@ RUN pip3 install --no-cache-dir runpod pydub numpy soundfile scipy
 
 COPY handler.py .
 
-# Pre-download weights (This will now succeed)
+# Pre-download weights
 RUN python3 -c 'from TTS.api import TTS; TTS("tts_models/multilingual/multi-dataset/xtts_v2")'
 
 CMD ["python3", "-u", "handler.py"]
