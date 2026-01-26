@@ -11,21 +11,26 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
-# Upgrade pip first
+# Upgrade pip
 RUN pip3 install --no-cache-dir --upgrade pip
 
-# Install Torch individually (The biggest part)
+# Install Torch (Large layer)
 RUN pip3 install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cu118
 
-# Install TTS with NO-CACHE to save RAM during build
+# --- CRITICAL FIX START ---
+# Downgrade transformers to fix the 'BeamSearchScorer' ImportError
+RUN pip3 install --no-cache-dir transformers==4.33.0
+# --- CRITICAL FIX END ---
+
+# Install TTS
 RUN pip3 install --no-cache-dir TTS
 
-# Install the rest
+# Install remaining requirements
 RUN pip3 install --no-cache-dir runpod pydub numpy soundfile scipy
 
 COPY handler.py .
 
-# Pre-download weights
+# Pre-download weights (This will now succeed)
 RUN python3 -c 'from TTS.api import TTS; TTS("tts_models/multilingual/multi-dataset/xtts_v2")'
 
 CMD ["python3", "-u", "handler.py"]
