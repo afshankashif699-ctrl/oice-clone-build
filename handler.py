@@ -48,8 +48,8 @@ def handler(job):
         
         # --- OPTIMIZED SETTINGS ---
         temperature = float(job_input.get("temperature", 0.65)) 
-        repetition_penalty = float(job_input.get("repetition_penalty", 1.8)) 
-        top_p = float(job_input.get("top_p", 0.80))
+        repetition_penalty = float(job_input.get("repetition_penalty", 1.2)) 
+        top_p = float(job_input.get("top_p", 0.85))
         speed = float(job_input.get("speed", 1.0))
 
         raw_path = "/tmp/raw_ref.wav"
