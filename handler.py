@@ -71,7 +71,7 @@ def handler(job):
         # Temperature 0.75 accent k liye, lekin top_k glitch rokny k liye
         temperature = float(job_input.get("temperature", 0.75))
         # Penalty ko 1.1 kar diya taake awaaz ki "bhaari-pan" (timbre) na katay
-        repetition_penalty = float(job_input.get("repetition_penalty", 1.1))
+        repetition_penalty = float(job_input.get("repetition_penalty", 4.0))
         top_p = float(job_input.get("top_p", 0.85))
         top_k = int(job_input.get("top_k", 50)) # Added safety layer
         
