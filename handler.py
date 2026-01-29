@@ -21,14 +21,12 @@ def init_model():
 def audio_prep(input_path, output_path):
     try:
         audio = AudioSegment.from_file(input_path)
-        
-        # Normalize and remove silence to help the model focus only on voice
+        # Normalize volume to make accent features clear
         audio = effects.normalize(audio)
         
-        # XTTS Accent Secret: Keep the reference between 6 to 10 seconds.
-        # Too short = no accent. Too long = model gets confused.
-        if len(audio) > 12000:
-            audio = audio[:12000]
+        # Accent ke liye 8-10 seconds ka clear audio best hai
+        if len(audio) > 10000:
+            audio = audio[:10000]
             
         audio = audio.set_channels(1).set_frame_rate(22050).set_sample_width(2)
         audio.export(output_path, format="wav")
@@ -48,18 +46,16 @@ def handler(job):
         language = job_input.get("language", "en")
         speaker_wav_b64 = job_input.get("speaker_wav", "")
         
-        # --- ACCENT OPTIMIZED SETTINGS ---
+        # --- ULTIMATE ACCENT SETTINGS ---
+        # Temperature badhane se accent capture hota hai
+        temperature = float(job_input.get("temperature", 0.88)) 
         
-        # 1. Temperature: High (0.85) gives the model freedom to mimic the accent quirks.
-        temperature = float(job_input.get("temperature", 0.85))
+        # Penalty ko mazeed kam kiya hai (1.30) taake accent ki "vibrations" copy hon
+        repetition_penalty = float(job_input.get("repetition_penalty", 1.30))
         
-        # 2. Repetition Penalty: Low (1.45) is CRITICAL. 
-        # High penalty (like 2.0 or 4.0) strips the accent and makes it robotic.
-        repetition_penalty = float(job_input.get("repetition_penalty", 1.45))
-        
-        # 3. Top_P: Slightly lower (0.80) to keep the voice stable while accented.
-        top_p = float(job_input.get("top_p", 0.80))
-        
+        # Top_k ko limit karne se voice "standard" nahi hoti balkay reference jaisi rehti hai
+        top_k = int(job_input.get("top_k", 40)) 
+        top_p = float(job_input.get("top_p", 0.85))
         speed = float(job_input.get("speed", 1.0))
         
         raw_path = "/tmp/raw_ref.wav"
@@ -75,14 +71,16 @@ def handler(job):
         if not audio_prep(raw_path, clean_path):
             return {"status": "error", "message": "Audio preprocessing failed"}
 
-        # Generate using the optimized accent parameters
+        # --- GENERATION WITH ACCENT FOCUS ---
         wav = tts.tts(
             text=text,
             speaker_wav=clean_path,
             language=language,
             temperature=temperature,
             top_p=top_p,
+            top_k=top_k,
             repetition_penalty=repetition_penalty,
+            length_penalty=1.0, 
             speed=speed,
             split_sentences=True 
         )
