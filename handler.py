@@ -15,19 +15,20 @@ def init_model():
     global tts
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Loading XTTS v2 on {device}...")
-    # Load model with deep_speed if available for faster inference
     tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2").to(device)
     print("✅ Model Loaded Successfully!")
 
 def audio_prep(input_path, output_path):
     try:
         audio = AudioSegment.from_file(input_path)
+        
+        # Normalize and remove silence to help the model focus only on voice
         audio = effects.normalize(audio)
         
-        # XTTS likes a little bit of silence at the start/end of the ref clip
-        # Truncate to 10 seconds max - longer doesn't help much
-        if len(audio) > 10000:
-            audio = audio[:10000]
+        # XTTS Accent Secret: Keep the reference between 6 to 10 seconds.
+        # Too short = no accent. Too long = model gets confused.
+        if len(audio) > 12000:
+            audio = audio[:12000]
             
         audio = audio.set_channels(1).set_frame_rate(22050).set_sample_width(2)
         audio.export(output_path, format="wav")
@@ -47,12 +48,18 @@ def handler(job):
         language = job_input.get("language", "en")
         speaker_wav_b64 = job_input.get("speaker_wav", "")
         
-        # --- TUNED SETTINGS ---
-        # Temperature 0.65 - 0.75 is the sweet spot for stability vs emotion
-        temperature = float(job_input.get("temperature", 0.75))
-        # Lowered penalty! 4.0 was too high. 1.5 - 2.0 is better for cloning.
-        repetition_penalty = float(job_input.get("repetition_penalty", 2.0))
-        top_p = float(job_input.get("top_p", 0.85))
+        # --- ACCENT OPTIMIZED SETTINGS ---
+        
+        # 1. Temperature: High (0.85) gives the model freedom to mimic the accent quirks.
+        temperature = float(job_input.get("temperature", 0.85))
+        
+        # 2. Repetition Penalty: Low (1.45) is CRITICAL. 
+        # High penalty (like 2.0 or 4.0) strips the accent and makes it robotic.
+        repetition_penalty = float(job_input.get("repetition_penalty", 1.45))
+        
+        # 3. Top_P: Slightly lower (0.80) to keep the voice stable while accented.
+        top_p = float(job_input.get("top_p", 0.80))
+        
         speed = float(job_input.get("speed", 1.0))
         
         raw_path = "/tmp/raw_ref.wav"
@@ -68,11 +75,7 @@ def handler(job):
         if not audio_prep(raw_path, clean_path):
             return {"status": "error", "message": "Audio preprocessing failed"}
 
-        # --- FIXING THE GAP ISSUE ---
-        # Instead of manual looping, we use the built-in split_sentences=True
-        # This allows the model to handle transitions more naturally.
-        # If the text is very long (> 200 chars), the model handles internal chunking.
-        
+        # Generate using the optimized accent parameters
         wav = tts.tts(
             text=text,
             speaker_wav=clean_path,
@@ -81,13 +84,10 @@ def handler(job):
             top_p=top_p,
             repetition_penalty=repetition_penalty,
             speed=speed,
-            split_sentences=True # Let the engine handle sentence breaks
+            split_sentences=True 
         )
 
-        # Remove leading/trailing silence from the FINAL output
-        # (This prevents the 'empty air' at the start and end of the file)
         wav_norm = np.array(wav)
-        
         sf.write(output_path, wav_norm, 24000)
         
         with open(output_path, "rb") as f:
