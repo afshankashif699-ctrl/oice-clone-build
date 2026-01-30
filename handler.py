@@ -21,10 +21,10 @@ def init_model():
 def audio_prep(input_path, output_path):
     try:
         audio = AudioSegment.from_file(input_path)
-        # Normalize volume to make accent features clear
+        # Normalize and strip silence to focus ONLY on the voice profile
         audio = effects.normalize(audio)
         
-        # Accent ke liye 8-10 seconds ka clear audio best hai
+        # Accent ke liye 7-10 seconds ka clear audio best hai
         if len(audio) > 10000:
             audio = audio[:10000]
             
@@ -46,17 +46,18 @@ def handler(job):
         language = job_input.get("language", "en")
         speaker_wav_b64 = job_input.get("speaker_wav", "")
         
-        # --- ULTIMATE ACCENT SETTINGS ---
-        # Temperature badhane se accent capture hota hai
-        temperature = float(job_input.get("temperature", 0.88)) 
+        # --- 100% ACCENT & FLOW SETTINGS ---
+        # Temperature 0.90 tak le jane se accent 100% copy hota hai (quirks copy hote hain)
+        temperature = float(job_input.get("temperature", 0.90)) 
         
-        # Penalty ko mazeed kam kiya hai (1.30) taake accent ki "vibrations" copy hon
-        repetition_penalty = float(job_input.get("repetition_penalty", 1.30))
+        # Repetition Penalty ko 1.25 rakha hai taake speed aur flow natural rahe
+        repetition_penalty = float(job_input.get("repetition_penalty", 1.25))
         
-        # Top_k ko limit karne se voice "standard" nahi hoti balkay reference jaisi rehti hai
-        top_k = int(job_input.get("top_k", 40)) 
-        top_p = float(job_input.get("top_p", 0.85))
-        speed = float(job_input.get("speed", 1.0))
+        # Speed: Reference voice ke flow ke liye 1.05 - 1.10 aksar behtar lagta hai
+        speed = float(job_input.get("speed", 1.05))
+        
+        top_k = int(job_input.get("top_k", 50))
+        top_p = float(job_input.get("top_p", 0.80))
         
         raw_path = "/tmp/raw_ref.wav"
         clean_path = "/tmp/clean_ref.wav"
@@ -71,18 +72,24 @@ def handler(job):
         if not audio_prep(raw_path, clean_path):
             return {"status": "error", "message": "Audio preprocessing failed"}
 
-        # --- GENERATION WITH ACCENT FOCUS ---
+        # --- FLOW FIX: CLEANING TEXT ---
+        # XTTS breaks tab leta hai jab punctuation zyada ho. 
+        # Hum unnecessary full stops aur commas ko manage karte hain.
+        clean_text = text.replace("...", ".").replace("\n", " ")
+
+        # --- GENERATION ---
+        # split_sentences=False aur manual length_penalty se flow banta hai
         wav = tts.tts(
-            text=text,
+            text=clean_text,
             speaker_wav=clean_path,
             language=language,
             temperature=temperature,
             top_p=top_p,
             top_k=top_k,
             repetition_penalty=repetition_penalty,
-            length_penalty=1.0, 
+            length_penalty=1.0, # Neutral length maintenance
             speed=speed,
-            split_sentences=True 
+            split_sentences=False # Isay False rakhne se sentences ke beech break khatam ho jayega
         )
 
         wav_norm = np.array(wav)
