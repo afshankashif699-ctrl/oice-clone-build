@@ -48,7 +48,7 @@ def handler(job):
         
         # --- 100% ACCENT & FLOW SETTINGS ---
         # Temperature 0.90 tak le jane se accent 100% copy hota hai (quirks copy hote hain)
-        temperature = float(job_input.get("temperature", 0.75)) 
+        temperature = float(job_input.get("temperature", 0.65)) 
         
         # Repetition Penalty ko 1.25 rakha hai taake speed aur flow natural rahe
         repetition_penalty = float(job_input.get("repetition_penalty", 0.5))
