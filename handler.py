@@ -48,10 +48,10 @@ def handler(job):
         
         # --- 100% ACCENT & FLOW SETTINGS ---
         # Temperature 0.90 tak le jane se accent 100% copy hota hai (quirks copy hote hain)
-        temperature = float(job_input.get("temperature", 0.65)) 
+        temperature = float(job_input.get("temperature", 0.70)) 
         
         # Repetition Penalty ko 1.25 rakha hai taake speed aur flow natural rahe
-        repetition_penalty = float(job_input.get("repetition_penalty", 0.5))
+        repetition_penalty = float(job_input.get("repetition_penalty", 1.0))
         
         # Speed: Reference voice ke flow ke liye 1.05 - 1.10 aksar behtar lagta hai
         speed = float(job_input.get("speed", 1.05))
