@@ -51,7 +51,7 @@ def handler(job):
         temperature = float(job_input.get("temperature", 0.70)) 
         
         # Repetition Penalty ko 1.25 rakha hai taake speed aur flow natural rahe
-        repetition_penalty = float(job_input.get("repetition_penalty", 1.0))
+        repetition_penalty = float(job_input.get("repetition_penalty", 1.5))
         
         # Speed: Reference voice ke flow ke liye 1.05 - 1.10 aksar behtar lagta hai
         speed = float(job_input.get("speed", 1.05))
